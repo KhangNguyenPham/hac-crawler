@@ -8,3 +8,11 @@ python main.py
     color: red;
     font-weight: bold;
 }
+
+#Rebuild
+docker cp hac-crawler:/app/cache ./cache_backup
+docker stop hac-crawler
+docker rm hac-crawler
+docker build -t hac-crawler .
+docker run -d --name hac-crawler --env-file .env -v $(pwd)/cache_backup:/app/cache hac-crawler
+python main.py

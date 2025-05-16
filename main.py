@@ -100,6 +100,8 @@ def get_song_details(url):
         author_str = " - ".join(authors) if authors else "No author"
         rhythm = soup.select_one('#display-rhythm')
         category = rhythm.text.strip() if rhythm else ""
+        singer_el = soup.select_one("span.perform-singer-list a.author-item")
+        singer_name = singer_el.text.strip() if singer_el else ""
 
         lyrics = []
 
@@ -128,7 +130,8 @@ def get_song_details(url):
             'content': "\n".join(lyrics),
             'author_str': author_str,
             'category': category,
-            'url': url
+            'url': url,
+            'singer': singer_name
         }
     except Exception as e:
         print(f"[ERROR] get_song_details {url}: {e}")
@@ -164,15 +167,41 @@ def get_or_create_wp_category(name):
 
         return None
 
+def get_or_create_wp_tag(name):
+    try:
+        response = requests.get(
+            f"{WP_SITE_URL}/wp-json/wp/v2/tags",
+            params={"search": name},
+            auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+        )
+        response.raise_for_status()
+        data = response.json()
+        if data:
+            return data[0]["id"]
+
+        response = requests.post(
+            f"{WP_SITE_URL}/wp-json/wp/v2/tags",
+            json={"name": name},
+            auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+        )
+        response.raise_for_status()
+        return response.json()["id"]
+    except Exception as e:
+        print(f"[ERROR] get_or_create_wp_tag '{name}': {e}")
+
+        return None
+
 def post_to_wordpress(song):
     try:
         category_id = get_or_create_wp_category(song['category']) if song['category'] else None
+        tag_id = get_or_create_wp_tag(song["singer"]) if song.get("singer") else None
 
         post_data = {
             "title": song['title'],
             "content": f"<pre>{song['content']}</pre>",
-            "status": "publish",
+            "status": "draft",
             "categories": [category_id] if category_id else [],
+            "tags": [tag_id] if tag_id else [],
         }
 
         response = requests.post(
